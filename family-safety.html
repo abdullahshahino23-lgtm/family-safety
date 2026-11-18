@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>أمان العائلة — تتبّع وطمأنينة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#f4f7f5; --surface:#ffffff; --surface2:#eef3f0; --line:#dde6e0;
+  --ink:#12211c; --muted:#5b6f66; --faint:#8aa096;
+  --teal:#0e7c66; --teal-dark:#0a5e4e; --teal-soft:#e0f2ec;
+  --amber:#b7791f; --amber-soft:#fdf3d8;
+  --red:#c92a2a; --red-soft:#fdecec; --red-dark:#a61e1e;
+  --blue:#1971c2; --blue-soft:#e7f0fb;
+  --shadow:0 8px 30px rgba(18,33,28,.08);
+  --radius:18px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0d1512; --surface:#16211c; --surface2:#1c2a24; --line:#2a3d35;
+    --ink:#e8f0ec; --muted:#a3b8ae; --faint:#6e857b;
+    --teal:#2fbfa0; --teal-dark:#25a88b; --teal-soft:#14332b;
+    --amber:#e0a83e; --amber-soft:#3a2f14; --red-soft:#3d1a1a; --blue-soft:#16283d;
+    --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:'Tajawal',system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+button,input,select{font-family:inherit}
+button,[role="button"],select,input{min-height:44px}
+a{color:var(--teal)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 110px}
+
+/* Top bar */
+.topbar{position:sticky;top:0;z-index:1200;background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.topbar-in{max-width:1180px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;font-weight:900;font-size:1.25rem}
+.logo-badge{width:42px;height:42px;border-radius:12px;background:var(--teal);color:#fff;display:grid;place-items:center;flex-shrink:0}
+.logo small{display:block;font-size:.78rem;font-weight:500;color:var(--muted);line-height:1.2}
+.top-actions{margin-inline-start:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 16px;border-radius:999px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:.92rem;transition:.15s}
+.btn:hover{border-color:var(--teal);color:var(--teal)}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.primary:hover{background:var(--teal-dark);color:#fff}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn.danger:hover{background:var(--red-dark);color:#fff}
+.fam-chip{display:inline-flex;align-items:center;gap:8px;background:var(--teal-soft);border:1px solid var(--teal);color:var(--teal-dark);border-radius:999px;padding:6px 14px;font-weight:800;font-size:.88rem}
+.fam-chip b{direction:ltr;letter-spacing:2px}
+
+/* SOS banner */
+.sos-banner{display:none;background:var(--red);color:#fff;padding:14px 16px;text-align:center;font-weight:800}
+.sos-banner.show{display:block;animation:pulseBg 1s infinite}
+@keyframes pulseBg{0%,100%{background:var(--red)}50%{background:var(--red-dark)}}
+.sos-banner button{background:#fff;color:var(--red);border:none;border-radius:999px;padding:6px 18px;font-weight:800;cursor:pointer;margin-inline-start:10px;min-height:36px}
+
+/* Status banner */
+.status-banner{display:none;max-width:1180px;margin:14px auto 0;padding:12px 16px;border-radius:14px;font-weight:700;font-size:.92rem;width:calc(100% - 32px)}
+.status-banner.show{display:block}
+.status-banner.err{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
+.status-banner.warn{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}
+.status-banner.info{background:var(--blue-soft);color:var(--blue);border:1px solid var(--blue)}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0 16px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.stat b{font-size:1.7rem;display:block;line-height:1.1}
+.stat span{color:var(--muted);font-size:.88rem;font-weight:500}
+.stat .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--teal);margin-inline-end:5px}
+.stat.warn b{color:var(--red)}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-head{padding:16px 18px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.card-head h2{margin:0;font-size:1.1rem;font-weight:800}
+.card-head p{margin:2px 0 0;color:var(--muted);font-size:.86rem}
+#map{height:480px;width:100%;z-index:1;background:var(--surface2)}
+.map-foot{padding:10px 18px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);font-size:.82rem;color:var(--muted);align-items:center}
+.chip{border:1px solid var(--line);background:var(--surface2);border-radius:999px;padding:4px 12px;font-weight:700;color:var(--ink);cursor:pointer;min-height:32px;font-size:.82rem}
+.chip:hover{border-color:var(--teal);color:var(--teal)}
+
+/* Members */
+.members{display:flex;flex-direction:column;gap:10px;padding:6px 14px 16px}
+.member{display:flex;gap:12px;padding:13px;border:1px solid var(--line);border-radius:14px;cursor:pointer;transition:.15s;background:var(--surface);text-align:right;width:100%}
+.member:hover,.member.active{border-color:var(--teal);background:var(--teal-soft)}
+.member.sos{border-color:var(--red);background:var(--red-soft)}
+.avatar{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:1.15rem;flex-shrink:0;position:relative}
+.avatar::after{content:'';position:absolute;bottom:1px;inset-inline-start:1px;width:12px;height:12px;border-radius:50%;background:#2fbf71;border:2.5px solid var(--surface)}
+.member.offline .avatar::after{background:var(--faint)}
+.member.offline{opacity:.75}
+.member-main{flex:1;min-width:0}
+.member-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.member-top b{font-size:1rem}
+.rel{font-size:.72rem;background:var(--surface2);border:1px solid var(--line);padding:1px 9px;border-radius:999px;font-weight:700;color:var(--muted)}
+.you{font-size:.72rem;background:var(--teal);padding:1px 9px;border-radius:999px;font-weight:800;color:#fff}
+.sos-tag{font-size:.72rem;background:var(--red);padding:1px 9px;border-radius:999px;font-weight:800;color:#fff}
+.member-loc{font-size:.85rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.member-meta{display:flex;align-items:center;gap:10px;margin-top:5px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
+.batt{display:inline-flex;align-items:center;gap:5px;font-weight:700}
+.batt-bar{width:44px;height:8px;border-radius:99px;background:var(--surface2);border:1px solid var(--line);overflow:hidden;display:inline-block}
+.batt-fill{height:100%;border-radius:99px}
+.batt.low{color:var(--red)}
+.zone-tag{font-size:.72rem;font-weight:800;padding:1px 9px;border-radius:999px}
+.zone-tag.in{background:var(--teal-soft);color:var(--teal)}
+.zone-tag.out{background:var(--amber-soft);color:var(--amber)}
+.share-state{display:flex;align-items:center;gap:8px;padding:10px 14px;margin:0 14px 12px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);font-size:.85rem;font-weight:700}
+.share-state .dot{width:9px;height:9px;border-radius:50%;background:#2fbf71;flex-shrink:0}
+.share-state.bad .dot{background:var(--red)}
+.share-state.wait .dot{background:var(--amber)}
+
+/* Detail panel */
+.detail{padding:0 18px 18px;display:none}
+.detail.show{display:block}
+.detail h3{margin:6px 0 4px;font-size:1rem}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-top:10px;font-size:.9rem}
+.detail-grid span{color:var(--muted)}
+.detail-grid b{font-weight:800}
+
+/* Bottom grid */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.alerts-list,.zones-list{padding:4px 14px 16px;display:flex;flex-direction:column;gap:9px;max-height:430px;overflow:auto}
+.alert-item{display:flex;gap:11px;padding:12px;border-radius:13px;border:1px solid var(--line);background:var(--surface)}
+.alert-item.unread{border-inline-start:4px solid var(--red)}
+.alert-ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex-shrink:0}
+.alert-item p{margin:0;font-size:.9rem;font-weight:600}
+.alert-item time{font-size:.76rem;color:var(--faint)}
+.a-sos .alert-ico{background:var(--red-soft);color:var(--red)}
+.a-zone .alert-ico{background:var(--amber-soft);color:var(--amber)}
+.a-batt .alert-ico{background:var(--red-soft);color:var(--red)}
+.a-info .alert-ico{background:var(--blue-soft);color:var(--blue)}
+.zone-item{display:flex;gap:11px;padding:12px;border-radius:13px;border:1px solid var(--line);align-items:center}
+.zone-ico{width:42px;height:42px;border-radius:12px;background:var(--teal-soft);color:var(--teal);display:grid;place-items:center;flex-shrink:0}
+.zone-item b{display:block}
+.zone-item span{font-size:.82rem;color:var(--muted)}
+.zone-item .del{margin-inline-start:auto;background:none;border:none;color:var(--faint);cursor:pointer;padding:8px;border-radius:8px;min-height:36px}
+.zone-item .del:hover{color:var(--red)}
+.empty{padding:22px;text-align:center;color:var(--muted);font-size:.9rem}
+.waiting{padding:18px 14px;text-align:center}
+.waiting .big-code{margin:12px auto 6px;max-width:260px}
+
+/* SOS float */
+.sos-wrap{position:fixed;bottom:20px;left:20px;z-index:1300;display:none;flex-direction:column;align-items:center;gap:6px}
+.sos-wrap.show{display:flex}
+.sos-btn{width:84px;height:84px;border-radius:50%;border:5px solid #fff;background:var(--red);color:#fff;font-family:inherit;font-weight:900;font-size:1.25rem;cursor:pointer;box-shadow:0 10px 32px rgba(201,42,42,.45);animation:sosPulse 2.2s infinite}
+@keyframes sosPulse{0%{box-shadow:0 10px 32px rgba(201,42,42,.45),0 0 0 0 rgba(201,42,42,.35)}70%{box-shadow:0 10px 32px rgba(201,42,42,.45),0 0 0 18px rgba(201,42,42,0)}100%{box-shadow:0 10px 32px rgba(201,42,42,.45),0 0 0 0 rgba(201,42,42,0)}}
+.sos-btn:active{transform:scale(.94)}
+.sos-label{font-size:.78rem;font-weight:800;color:var(--muted);background:var(--surface);padding:2px 12px;border-radius:999px;border:1px solid var(--line)}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(10,20,16,.55);z-index:2000;display:none;align-items:flex-end;justify-content:center;padding:0}
+.overlay.show{display:flex}
+.modal{background:var(--surface);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:24px 22px 30px}
+@media(min-width:640px){.overlay{align-items:center;padding:20px}.modal{border-radius:22px}}
+.modal h2{margin:0 0 4px;font-size:1.3rem;font-weight:900}
+.modal .sub{color:var(--muted);font-size:.9rem;margin:0 0 18px}
+.field{margin-bottom:14px}
+.field label{display:block;font-weight:700;font-size:.9rem;margin-bottom:6px}
+.field input,.field select{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--surface);color:var(--ink);font-size:1rem}
+.field input:focus,.field select:focus{outline:none;border-color:var(--teal)}
+.field .hint{font-size:.78rem;color:var(--faint);margin-top:4px}
+.field .err{font-size:.8rem;color:var(--red);margin-top:4px;display:none;font-weight:700}
+.modal-actions{display:flex;gap:10px;margin-top:18px}
+.modal-actions .btn{flex:1;justify-content:center;padding:12px}
+input[type=range]{width:100%;accent-color:var(--teal)}
+.toast{position:fixed;bottom:120px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:11px 22px;border-radius:999px;font-weight:700;font-size:.9rem;z-index:3000;opacity:0;pointer-events:none;transition:.25s;max-width:92vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.leaflet-popup-content{font-family:'Tajawal',sans-serif;direction:rtl;text-align:right}
+.mk{display:grid;place-items:center;color:#fff;font-weight:900;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 4px 14px rgba(0,0,0,.3);width:38px;height:38px;font-size:.95rem}
+.mk span{transform:rotate(45deg)}
+.mk.sosmk{outline:3px solid var(--red)}
+footer{margin-top:26px;text-align:center;color:var(--faint);font-size:.82rem}
+
+/* Setup screen */
+.setup{position:fixed;inset:0;z-index:2500;background:var(--bg);overflow:auto;display:none;padding:26px 16px 60px}
+.setup.show{display:block}
+.setup-card{width:100%;max-width:470px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:28px 24px}
+.setup-head{text-align:center;margin-bottom:20px}
+.setup-head .logo-badge{width:58px;height:58px;border-radius:16px;margin:0 auto 10px}
+.setup-head h1{margin:0;font-size:1.5rem;font-weight:900}
+.setup-head p{margin:4px 0 0;color:var(--muted);font-size:.92rem}
+.tabs{display:flex;background:var(--surface2);border-radius:12px;padding:4px;gap:4px;margin-bottom:18px}
+.tabs button{flex:1;border:none;background:transparent;padding:10px;border-radius:9px;font-weight:800;cursor:pointer;color:var(--muted);font-size:.95rem}
+.tabs button.on{background:var(--surface);color:var(--teal);box-shadow:var(--shadow)}
+.code-input{direction:ltr;text-align:center;font-size:1.45rem;font-weight:900;letter-spacing:6px;text-transform:uppercase}
+.big-code{font-size:1.9rem;font-weight:900;letter-spacing:7px;direction:ltr;text-align:center;background:var(--teal-soft);border:1.5px dashed var(--teal);border-radius:14px;padding:12px;color:var(--teal-dark)}
+.setup .err-box{display:none;background:var(--red-soft);color:var(--red);border:1px solid var(--red);border-radius:12px;padding:10px 14px;font-weight:700;font-size:.88rem;margin-bottom:14px}
+.setup .err-box.show{display:block}
+.setup .conn-note{text-align:center;color:var(--muted);font-size:.85rem;margin-top:14px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  #map{height:380px}
+}
+</style>
+</head>
+<body>
+
+<div class="sos-banner" id="sosBanner" role="alert"></div>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="logo">
+      <span class="logo-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <span>أمان العائلة<small>تتبّع مباشر وتنبيهات أمان لأفراد أسرتك</small></span>
+    </div>
+    <div class="top-actions">
+      <span class="fam-chip" id="famChip" style="display:none">كود العائلة <b id="famCodeTxt"></b></span>
+      <button class="btn" id="addZoneBtnTop">＋ منطقة آمنة</button>
+      <button class="btn primary" id="inviteBtn">دعوة العائلة</button>
+    </div>
+  </div>
+</header>
+
+<div class="status-banner" id="statusBanner" role="status"></div>
+
+<div class="wrap" id="appMain">
+
+  <!-- Stats -->
+  <section class="stats" aria-label="ملخص الحالة">
+    <div class="stat"><b id="statMembers">٠</b><span><span class="dot"></span>أفراد متصلون الآن</span></div>
+    <div class="stat"><b id="statInside">—</b><span>داخل مناطق آمنة</span></div>
+    <div class="stat"><b id="statZones">٠</b><span>مناطق آمنة مفعّلة</span></div>
+    <div class="stat warn"><b id="statAlerts">٠</b><span>تنبيهات غير مقروءة</span></div>
+  </section>
+
+  <div class="layout">
+    <!-- Map -->
+    <section class="card">
+      <div class="card-head">
+        <div><h2>الخريطة الحية</h2><p>مواقع أفراد العائلة مباشرة من هواتفهم — اضغط على أي فرد للتركيز عليه</p></div>
+        <button class="btn" id="fitBtn">عرض الكل</button>
+      </div>
+      <div id="map" aria-label="خريطة مواقع أفراد العائلة"></div>
+      <div class="map-foot">
+        <span>تركيز سريع:</span>
+        <span id="quickChips" style="display:contents"></span>
+      </div>
+
+      <!-- Member detail -->
+      <div class="detail" id="detailPanel">
+        <h3 id="detailTitle">تفاصيل الفرد</h3>
+        <div class="detail-grid" id="detailGrid"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn" id="dirLink" href="#" target="_blank" rel="noopener" style="text-decoration:none">الاتجاهات إلى موقعه</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Members -->
+    <aside class="card">
+      <div class="card-head">
+        <div><h2>أفراد العائلة</h2><p id="lastSync">جارٍ الاتصال…</p></div>
+      </div>
+      <div class="share-state wait" id="shareState"><span class="dot"></span><span id="shareStateTxt">جارٍ تجهيز مشاركة موقع هذا الهاتف…</span></div>
+      <div class="members" id="membersList"></div>
+      <div style="padding:0 14px 16px">
+        <button class="btn primary" style="width:100%;justify-content:center" id="inviteBtn2">دعوة فرد جديد بكود العائلة</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="grid2">
+    <!-- Alerts -->
+    <section class="card">
+      <div class="card-head">
+        <div><h2>تنبيهات الأمان</h2><p>استغاثة، دخول وخروج من المناطق الآمنة، وبطارية منخفضة — لحظة بلحظة</p></div>
+        <button class="btn" id="readAllBtn">تعليم الكل كمقروء</button>
+      </div>
+      <div class="alerts-list" id="alertsList"></div>
+    </section>
+
+    <!-- Safe zones -->
+    <section class="card">
+      <div class="card-head">
+        <div><h2>المناطق الآمنة</h2><p>يصلك تنبيه فور دخول أي فرد إليها أو خروجه منها</p></div>
+        <button class="btn" id="addZoneBtn">＋ إضافة</button>
+      </div>
+      <div class="zones-list" id="zonesList"></div>
+    </section>
+  </div>
+
+  <footer>تتبّع مباشر حقيقي عبر Firebase — موقعك يُشارك فقط مع أفراد عائلتك الذين يعرفون كود العائلة، ويتوقف عند مغادرتها.</footer>
+</div>
+
+<!-- SOS -->
+<div class="sos-wrap" id="sosWrap">
+  <button class="sos-btn" id="sosBtn" aria-label="زر الاستغاثة">SOS</button>
+  <span class="sos-label">اضغط للاستغاثة الفورية</span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ===== Setup screen: create / join family ===== -->
+<div class="setup show" id="setupScreen">
+  <div class="setup-card">
+    <div class="setup-head">
+      <span class="logo-badge"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <h1>أمان العائلة</h1>
+      <p>تتبّع مباشر لأفراد أسرتك على الخريطة، مع مناطق آمنة وتنبيه استغاثة فوري.</p>
+    </div>
+
+    <div class="err-box" id="setupErr"></div>
+
+    <div class="tabs" role="tablist">
+      <button id="tabCreate" class="on" type="button">إنشاء عائلة جديدة</button>
+      <button id="tabJoin" type="button">الانضمام بكود</button>
+    </div>
+
+    <!-- Create -->
+    <div id="createPane">
+      <div class="field"><label for="cFamName">اسم العائلة</label><input id="cFamName" type="text" placeholder="مثال: عائلة شاهين" autocomplete="off"></div>
+      <div class="field"><label for="cName">اسمك</label><input id="cName" type="text" placeholder="مثال: عبدالله" autocomplete="off"></div>
+      <div class="field"><label for="cRole">دورك في العائلة</label>
+        <select id="cRole"><option>أب</option><option>أم</option><option>ابن</option><option>ابنة</option></select></div>
+      <div class="modal-actions">
+        <button class="btn primary" id="createBtn" style="flex:1">إنشاء العائلة والبدء</button>
+      </div>
+      <p class="hint" style="color:var(--faint);font-size:.8rem;text-align:center;margin:12px 0 0">سيتم إنشاء كود عائلة من ٦ أحرف — شاركه مع أفراد أسرتك لينضموا من هواتفهم.</p>
+    </div>
+
+    <!-- Join -->
+    <div id="joinPane" style="display:none">
+      <div class="field"><label for="jCode">كود العائلة</label>
+        <input id="jCode" class="code-input" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" autocapitalize="characters">
+        <div class="hint">الكود مكوّن من ٦ أحرف وأرقام — اطلبه من منشئ العائلة.</div></div>
+      <div class="field"><label for="jName">اسمك</label><input id="jName" type="text" placeholder="مثال: يوسف" autocomplete="off"></div>
+      <div class="field"><label for="jRole">دورك في العائلة</label>
+        <select id="jRole"><option>ابن</option><option>ابنة</option><option>أب</option><option>أم</option></select></div>
+      <div class="modal-actions">
+        <button class="btn primary" id="joinBtn" style="flex:1">الانضمام إلى العائلة</button>
+      </div>
+    </div>
+
+    <p class="conn-note" id="connNote">جارٍ الاتصال بخادم التتبّع…</p>
+  </div>
+</div>
+
+<!-- ===== Invite Modal ===== -->
+<div class="overlay" id="inviteModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="دعوة أفراد العائلة">
+    <h2>دعوة أفراد العائلة</h2>
+    <p class="sub">شارك كود العائلة التالي مع أسرتك. يفتح كل فرد التطبيق من هاتفه، يختار «الانضمام بكود»، ويدخل الكود واسمه — وسيظهر موقعه هنا مباشرة.</p>
+    <div class="big-code" id="inviteCode">------</div>
+    <div class="modal-actions">
+      <button class="btn primary" id="copyCodeBtn">نسخ الكود</button>
+      <button class="btn" onclick="closeModal('inviteModal')">إغلاق</button>
+    </div>
+    <div style="border-top:1px solid var(--line);margin-top:20px;padding-top:16px">
+      <p class="sub" style="margin-bottom:10px">مغادرة العائلة توقف مشاركة موقع هذا الهاتف وتحذف وجودك من قائمة الأفراد.</p>
+      <button class="btn danger" id="leaveBtn" style="width:100%;justify-content:center">مغادرة العائلة وإيقاف المشاركة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Add Zone Modal ===== -->
+<div class="overlay" id="zoneModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="إضافة منطقة آمنة">
+    <h2>إضافة منطقة آمنة</h2>
+    <p class="sub">تُحفظ المنطقة في قاعدة بيانات العائلة، وتصل تنبيهات لجميع الأفراد عند دخول أي فرد إليها أو خروجه منها.</p>
+    <div class="field"><label for="zName">اسم المنطقة</label><input id="zName" type="text" placeholder="مثال: البيت، المدرسة، النادي"></div>
+    <div class="field"><label for="zCenter">مركز المنطقة</label>
+      <select id="zCenter">
+        <option value="me">موقعي الحالي (هذا الهاتف)</option>
+        <option value="map">مركز الخريطة الحالي</option>
+      </select></div>
+    <div class="field"><label>نصف القطر: <b id="zRadiusVal">٣٠٠</b> متر</label>
+      <input type="range" id="zRadius" min="100" max="1000" step="50" value="300"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('zoneModal')">إلغاء</button>
+      <button class="btn primary" id="saveZoneBtn">حفظ المنطقة</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ================= Helpers ================= */
+const $ = s => document.querySelector(s);
+const AR = '٠١٢٣٤٥٦٧٨٩';
+const toAr = n => String(n).replace(/\d/g, d => AR[d]);
+function timeAgo(ts){
+  if(!ts) return '—';
+  const s = Math.floor((Date.now()-ts)/1000);
+  if(s < 15) return 'الآن';
+  if(s < 60) return 'منذ ' + toAr(s) + ' ثانية';
+  const m = Math.floor(s/60);
+  if(m < 60) return 'منذ ' + toAr(m) + (m===1?' دقيقة': m===2?' دقيقتين':' دقائق');
+  const h = Math.floor(m/60);
+  if(h < 24) return 'منذ ' + toAr(h) + (h===1?' ساعة':' ساعات');
+  const d = Math.floor(h/24);
+  return 'منذ ' + toAr(d) + (d===1?' يوم':' أيام');
+}
+function clock(ts){ return new Date(ts).toLocaleTimeString('ar-EG',{hour:'numeric',minute:'2-digit'}); }
+function dist(a,b,c,d){
+  const R=6371000, rad=x=>x*Math.PI/180;
+  const dLa=rad(c-a), dLo=rad(d-b);
+  const h=Math.sin(dLa/2)**2 + Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2800);
+}
+const COLORS=['#0e7c66','#1971c2','#e8590c','#9333a8','#c2255c','#2b8a3e','#0b7285','#a61e4d'];
+function colorFor(id){ let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))>>>0; return COLORS[h%COLORS.length]; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function tsMs(t){ if(!t) return null; if(typeof t.toMillis==='function') return t.toMillis(); if(t.seconds) return t.seconds*1000; return null; }
+
+/* ================= Firebase ================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyA2QopOTAIyLkHG5XRy73L2Wq1MkrorNns",
+  authDomain: "family-safety-f8104.firebaseapp.com",
+  projectId: "family-safety-f8104",
+  storageBucket: "family-safety-f8104.firebasestorage.app",
+  messagingSenderId: "669066942592",
+  appId: "1:669066942592:web:8556018d67302241cd2e65"
+};
+let db=null, uid=null, fbReady=false;
+const IDKEY='fs_identity_v2';
+let identity=null;
+try{ identity=JSON.parse(localStorage.getItem(IDKEY)||'null'); }catch(e){ identity=null; }
+
+let members={}, zones={}, alertsArr=[], selectedId=null;
+let myPos=null, batteryLevel=null, watchId=null, lastWrite=0, lastWritePos=null;
+let myZoneName, zonesLoaded=false, lowBattSent=false, entered=false;
+let unsubs=[];
+
+function famRef(){ return db.collection('families').doc(identity.code); }
+function myRef(){ return famRef().collection('members').doc(uid); }
+function serverTs(){ return firebase.firestore.FieldValue.serverTimestamp(); }
+
+function setupError(msg){
+  const e=$('#setupErr'); e.textContent=msg; e.classList.add('show');
+}
+function clearSetupError(){ $('#setupErr').classList.remove('show'); }
+
+function showStatus(kind, msg){
+  const b=$('#statusBanner');
+  if(!msg){ b.className='status-banner'; b.textContent=''; return; }
+  b.className='status-banner show '+kind; b.textContent=msg;
+}
+
+/* ================= Setup screen tabs ================= */
+function setTab(join){
+  $('#tabCreate').classList.toggle('on', !join);
+  $('#tabJoin').classList.toggle('on', join);
+  $('#createPane').style.display = join?'none':'block';
+  $('#joinPane').style.display = join?'block':'none';
+  clearSetupError();
+}
+$('#tabCreate').addEventListener('click',()=>setTab(false));
+$('#tabJoin').addEventListener('click',()=>setTab(true));
+
+/* Prefill code from ?family=CODE link */
+try{
+  const q=new URLSearchParams(location.search).get('family');
+  if(q){ $('#jCode').value=q.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6); setTab(true); }
+}catch(e){}
+
+function genCode(){
+  const chars='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let c=''; for(let i=0;i<6;i++) c+=chars[Math.floor(Math.random()*chars.length)];
+  return c;
+}
+function saveIdentity(){ try{ localStorage.setItem(IDKEY, JSON.stringify(identity)); }catch(e){} }
+
+function setBusy(busy){
+  $('#createBtn').disabled=busy; $('#joinBtn').disabled=busy;
+  $('#createBtn').textContent = busy?'جارٍ الاتصال…':'إنشاء العائلة والبدء';
+  $('#joinBtn').textContent = busy?'جارٍ الاتصال…':'الانضمام إلى العائلة';
+}
+
+$('#createBtn').addEventListener('click', async ()=>{
+  clearSetupError();
+  if(!fbReady || !uid){ setupError('ما زال الاتصال بخادم التتبّع جاريًا — انتظر لحظة ثم حاول مجددًا.'); return; }
+  const name=$('#cName').value.trim();
+  if(!name){ setupError('من فضلك أدخل اسمك.'); return; }
+  setBusy(true);
+  try{
+    let code=genCode(), tries=0;
+    while(tries<5){
+      const snap=await db.collection('families').doc(code).get();
+      if(!snap.exists) break;
+      code=genCode(); tries++;
+    }
+    const famName=$('#cFamName').value.trim()||'عائلتي';
+    await db.collection('families').doc(code).set({ name:famName, createdAt:serverTs() });
+    identity={ code, name, role:$('#cRole').value, famName };
+    saveIdentity();
+    await enterFamily();
+  }catch(err){
+    setupError('تعذّر إنشاء العائلة — تحقق من اتصال الإنترنت وحاول مرة أخرى.');
+  }
+  setBusy(false);
+});
+
+$('#joinBtn').addEventListener('click', async ()=>{
+  clearSetupError();
+  if(!fbReady || !uid){ setupError('ما زال الاتصال بخادم التتبّع جاريًا — انتظر لحظة ثم حاول مجددًا.'); return; }
+  const code=$('#jCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const name=$('#jName').value.trim();
+  if(code.length!==6){ setupError('كود العائلة مكوّن من ٦ أحرف — تحقق منه وحاول مجددًا.'); return; }
+  if(!name){ setupError('من فضلك أدخل اسمك.'); return; }
+  setBusy(true);
+  try{
+    const snap=await db.collection('families').doc(code).get();
+    if(!snap.exists){ setupError('هذا الكود غير موجود — تأكد من كود العائلة الصحيح من منشئها.'); setBusy(false); return; }
+    identity={ code, name, role:$('#jRole').value, famName:(snap.data()&&snap.data().name)||'عائلتي' };
+    saveIdentity();
+    await enterFamily();
+  }catch(err){
+    setupError('تعذّر الانضمام — تحقق من اتصال الإنترنت وحاول مرة أخرى.');
+  }
+  setBusy(false);
+});
+
+/* ================= Enter family: live subscriptions + sharing ================= */
+async function enterFamily(){
+  if(entered || !identity || !uid) return;
+  entered=true;
+  try{
+    await myRef().set({ name:identity.name, role:identity.role }, { merge:true });
+  }catch(e){}
+
+  $('#setupScreen').classList.remove('show');
+  $('#sosWrap').classList.add('show');
+  $('#famChip').style.display='inline-flex';
+  $('#famCodeTxt').textContent=identity.code;
+  $('#inviteCode').textContent=identity.code;
+  document.title='أمان العائلة — '+identity.famName;
+
+  unsubs.push(famRef().collection('members').onSnapshot(snap=>{
+    members={};
+    snap.forEach(d=>{ members[d.id]=Object.assign({id:d.id}, d.data()); });
+    $('#lastSync').textContent='آخر مزامنة: '+clock(Date.now());
+    renderAll();
+  }, err=>{ showStatus('err','انقطع الاتصال بقاعدة بيانات العائلة — تحقق من الإنترنت، وستتم إعادة المحاولة تلقائيًا.'); }));
+
+  unsubs.push(famRef().collection('zones').onSnapshot(snap=>{
+    zones={};
+    snap.forEach(d=>{ zones[d.id]=Object.assign({id:d.id}, d.data()); });
+    zonesLoaded=true;
+    renderAll();
+    checkMyZone();
+  }, err=>{}));
+
+  unsubs.push(famRef().collection('alerts').orderBy('at','desc').limit(30).onSnapshot(snap=>{
+    alertsArr=[];
+    snap.forEach(d=>{ const a=d.data(); alertsArr.push({ id:d.id, type:a.type||'info', text:a.text||'', memberName:a.memberName||'', at:tsMs(a.at)||Date.now() }); });
+    renderAlerts(); renderStats();
+  }, err=>{}));
+
+  startSharing();
+  setTimeout(fitAll, 600);
+}
+
+function setShareState(cls, txt){
+  const el=$('#shareState'); el.className='share-state '+cls;
+  $('#shareStateTxt').textContent=txt;
+}
+
+function startSharing(){
+  if(!('geolocation' in navigator)){
+    setShareState('bad','هذا المتصفح لا يدعم تحديد الموقع — لا يمكن مشاركة موقع هذا الهاتف.');
+    showStatus('err','المتصفح لا يدعم تحديد الموقع (Geolocation)، لذلك لن يظهر موقع هذا الهاتف لدى العائلة.');
+    return;
+  }
+  setShareState('wait','جارٍ طلب إذن الموقع من هذا الهاتف…');
+  watchId=navigator.geolocation.watchPosition(onPos, onGeoErr, { enableHighAccuracy:true, maximumAge:10000, timeout:25000 });
+  if(navigator.getBattery){
+    navigator.getBattery().then(b=>{
+      const upd=()=>{ batteryLevel=Math.round(b.level*100); checkLowBatt(); };
+      upd(); b.addEventListener('levelchange', upd);
+    }).catch(()=>{});
+  }
+}
+
+function onPos(pos){
+  const c=pos.coords;
+  myPos={ lat:c.latitude, lng:c.longitude, accuracy:Math.round(c.accuracy||0) };
+  setShareState('', 'مشاركة موقع هذا الهاتف مفعّلة — يراك أفراد عائلتك الآن.');
+  showStatus('', '');
+  checkMyZone();
+  const now=Date.now();
+  const moved = !lastWritePos || dist(myPos.lat,myPos.lng,lastWritePos.lat,lastWritePos.lng) > 15;
+  if(now-lastWrite < 4000 && !moved) return;
+  lastWrite=now; lastWritePos={ lat:myPos.lat, lng:myPos.lng };
+  const data={ lat:myPos.lat, lng:myPos.lng, accuracy:myPos.accuracy, updatedAt:serverTs() };
+  if(batteryLevel!=null) data.battery=batteryLevel;
+  myRef().set(data,{ merge:true }).catch(()=>{});
+}
+
+function onGeoErr(err){
+  if(err.code===1){
+    setShareState('bad','تم رفض إذن الموقع — فعّله من إعدادات المتصفح ليراك أفراد عائلتك.');
+    showStatus('err','تم رفض إذن الموقع على هذا الهاتف. لن يظهر موقعك لدى العائلة حتى تفعّل إذن الموقع من إعدادات المتصفح ثم تعيد تحميل الصفحة.');
+  }else if(err.code===2){
+    setShareState('wait','تعذّر تحديد الموقع حاليًا — جارٍ إعادة المحاولة…');
+  }else if(err.code===3){
+    setShareState('wait','تأخّر تحديد الموقع — جارٍ إعادة المحاولة…');
+  }
+}
+
+function checkLowBatt(){
+  if(batteryLevel==null || !entered) return;
+  if(batteryLevel<=20 && !lowBattSent){
+    lowBattSent=true;
+    addAlertDoc('batt','بطارية '+identity.name+' منخفضة ('+toAr(batteryLevel)+'٪) — يُفضّل تذكيره بالشحن.');
+  }
+  if(batteryLevel>30) lowBattSent=false;
+}
+
+/* Zone enter/exit detection for THIS phone; writes a shared alert */
+function zoneNameAt(lat,lng){
+  for(const id in zones){ const z=zones[id]; if(dist(lat,lng,z.lat,z.lng) <= z.radius) return z.name; }
+  return null;
+}
+function checkMyZone(){
+  if(!myPos || !zonesLoaded || !entered) return;
+  const z=zoneNameAt(myPos.lat,myPos.lng);
+  if(myZoneName===undefined){ myZoneName=z; return; }
+  if(z!==myZoneName){
+    if(myZoneName && !z) addAlertDoc('zone', identity.name+' خرج من منطقة «'+myZoneName+'».');
+    if(!myZoneName && z) addAlertDoc('info', identity.name+' وصل إلى منطقة «'+z+'».');
+    if(myZoneName && z) { addAlertDoc('zone', identity.name+' خرج من منطقة «'+myZoneName+'».'); addAlertDoc('info', identity.name+' وصل إلى منطقة «'+z+'».'); }
+    myZoneName=z;
+  }
+}
+
+function addAlertDoc(type, text){
+  if(!identity || !uid) return;
+  famRef().collection('alerts').add({ type, text, memberName:identity.name, at:serverTs() }).catch(()=>{});
+}
+
+/* ================= Map ================= */
+let map=null, markers={}, zoneLayers={};
+try{
+  if(typeof L !== 'undefined'){
+    map = L.map('map',{scrollWheelZoom:true}).setView([25.5,42],5);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  }
+}catch(e){ map=null; }
+if(!map){
+  document.getElementById('map').innerHTML='<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);padding:24px;text-align:center"><b style="color:var(--ink);font-size:1.05rem">تعذّر تحميل الخريطة حاليًا</b><span style="font-size:.9rem">تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة — بقية اللوحة (الأفراد والتنبيهات والمناطق) تعمل بشكل طبيعي.</span></div>';
+}
+function memberList(){ return Object.keys(members).map(id=>members[id]); }
+function isOnline(m){ const t=tsMs(m.updatedAt); return t && (Date.now()-t) < 120000; }
+function hasPos(m){ return typeof m.lat==='number' && typeof m.lng==='number'; }
+
+function memberIcon(m){
+  const col = m.sos ? '#c92a2a' : colorFor(m.id);
+  return L.divIcon({className:'',html:'<div class="mk'+(m.sos?' sosmk':'')+'" style="background:'+col+'"><span>'+esc((m.name||'؟').trim()[0])+'</span></div>',iconSize:[38,38],iconAnchor:[19,36],popupAnchor:[0,-34]});
+}
+function popupHtml(m){
+  const t=tsMs(m.updatedAt);
+  const inz = hasPos(m) ? zoneNameAt(m.lat,m.lng) : null;
+  return '<div style="min-width:170px"><b style="font-size:1.05rem">'+esc(m.name)+'</b> ('+esc(m.role||'')+')<br>'+
+    (hasPos(m) ? 'الموقع: '+m.lat.toFixed(5)+'، '+m.lng.toFixed(5)+'<br>' : 'لم يشارك موقعه بعد<br>')+
+    (typeof m.battery==='number' ? 'البطارية: '+toAr(m.battery)+'٪<br>' : '')+
+    (inz ? 'داخل منطقة «'+esc(inz)+'»<br>' : 'خارج المناطق الآمنة<br>')+
+    (m.sos ? '<b style="color:#c92a2a">طلب استغاثة SOS</b><br>' : '')+
+    '<span style="color:#888;font-size:.8rem">آخر تحديث: '+timeAgo(t)+'</span></div>';
+}
+function syncMap(){
+  if(!map || typeof L === 'undefined') return;
+  const list=memberList();
+  list.forEach(m=>{
+    if(!hasPos(m)){ if(markers[m.id]){ map.removeLayer(markers[m.id]); delete markers[m.id]; } return; }
+    if(markers[m.id]){ markers[m.id].setLatLng([m.lat,m.lng]); markers[m.id].setIcon(memberIcon(m)); markers[m.id].setPopupContent(popupHtml(m)); }
+    else{
+      const mk=L.marker([m.lat,m.lng],{icon:memberIcon(m)}).addTo(map).bindPopup(popupHtml(m));
+      mk.on('click',()=>selectMember(m.id,false));
+      markers[m.id]=mk;
+    }
+  });
+  Object.keys(markers).forEach(id=>{ if(!members[id]){ map.removeLayer(markers[id]); delete markers[id]; } });
+  Object.keys(zones).forEach(id=>{
+    const z=zones[id];
+    if(zoneLayers[id]){ zoneLayers[id].setLatLng([z.lat,z.lng]); zoneLayers[id].setRadius(z.radius); }
+    else{
+      zoneLayers[id]=L.circle([z.lat,z.lng],{radius:z.radius,color:'#0e7c66',weight:2,fillColor:'#0e7c66',fillOpacity:.10})
+        .addTo(map).bindTooltip('منطقة آمنة: '+esc(z.name),{direction:'top'});
+    }
+  });
+  Object.keys(zoneLayers).forEach(id=>{ if(!zones[id]){ map.removeLayer(zoneLayers[id]); delete zoneLayers[id]; } });
+}
+function fitAll(){
+  if(!map || typeof L === 'undefined') return;
+  const pts=memberList().filter(hasPos).map(m=>[m.lat,m.lng]);
+  Object.keys(zones).forEach(id=>pts.push([zones[id].lat,zones[id].lng]));
+  if(!pts.length) return;
+  if(pts.length===1) map.setView(pts[0],15);
+  else map.fitBounds(L.latLngBounds(pts).pad(0.25));
+}
+
+/* ================= Render ================= */
+function battColor(b){ return b<=25?'var(--red)': b<=50?'#e8a013':'var(--teal)'; }
+function renderMembers(){
+  const el=$('#membersList');
+  const list=memberList().sort((a,b)=> (a.id===uid?-1: b.id===uid?1 : (a.name||'').localeCompare(b.name||'','ar')));
+  if(!list.length){
+    el.innerHTML='<div class="empty">جارٍ تحميل أفراد العائلة…</div>';
+    $('#quickChips').innerHTML='';
+    return;
+  }
+  let html = list.map(m=>{
+    const t=tsMs(m.updatedAt), online=isOnline(m);
+    const inz = hasPos(m) ? zoneNameAt(m.lat,m.lng) : null;
+    return '<button class="member'+(m.id===selectedId?' active':'')+(online?'':' offline')+(m.sos?' sos':'')+'" data-id="'+m.id+'">'+
+      '<span class="avatar" style="background:'+(m.sos?'var(--red)':colorFor(m.id))+'">'+esc((m.name||'؟').trim()[0])+'</span>'+
+      '<span class="member-main">'+
+        '<span class="member-top"><b>'+esc(m.name)+'</b><span class="rel">'+esc(m.role||'')+'</span>'+(m.id===uid?'<span class="you">أنت</span>':'')+(m.sos?'<span class="sos-tag">استغاثة SOS</span>':'')+'</span>'+
+        '<span class="member-loc" style="display:block">'+(hasPos(m) ? (inz? 'داخل منطقة «'+esc(inz)+'»' : 'خارج المناطق الآمنة') + ' — '+m.lat.toFixed(4)+'، '+m.lng.toFixed(4) : 'لم يشارك موقعه بعد — بانتظار تفعيل الموقع من هاتفه')+'</span>'+
+        '<span class="member-meta">'+
+          (typeof m.battery==='number' ? '<span class="batt'+(m.battery<=25?' low':'')+'"><span class="batt-bar"><span class="batt-fill" style="display:block;width:'+m.battery+'%;background:'+battColor(m.battery)+'"></span></span>'+toAr(m.battery)+'٪</span>' : '')+
+          '<span>'+(t? (online?'متصل — ':'آخر ظهور ')+timeAgo(t) : 'لا يوجد تحديث بعد')+'</span>'+
+          (inz?'<span class="zone-tag in">داخل '+esc(inz)+'</span>':'<span class="zone-tag out">خارج المناطق الآمنة</span>')+
+        '</span>'+
+      '</span>'+
+    '</button>';
+  }).join('');
+  if(list.length<=1){
+    html += '<div class="waiting"><b>بانتظار الأعضاء</b><br><span style="color:var(--muted);font-size:.88rem">أنت أول فرد في هذه العائلة. شارك الكود التالي مع أسرتك لينضموا من هواتفهم وتظهر مواقعهم هنا مباشرة:</span><div class="big-code">'+esc(identity?identity.code:'')+'</div></div>';
+  }
+  el.innerHTML=html;
+  el.querySelectorAll('.member').forEach(b=>b.addEventListener('click',()=>selectMember(b.dataset.id,true)));
+  $('#quickChips').innerHTML = list.filter(hasPos).map(m=>'<button class="chip" data-id="'+m.id+'">'+esc((m.name||'').split(' ')[0])+'</button>').join('');
+  $('#quickChips').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>selectMember(c.dataset.id,true)));
+  renderSosBanner(list);
+}
+function renderSosBanner(list){
+  list = list || memberList();
+  const sos=list.filter(m=>m.sos);
+  const b=$('#sosBanner');
+  if(!sos.length){ b.classList.remove('show'); b.innerHTML=''; return; }
+  const names=sos.map(m=>esc(m.name)).join('، ');
+  const mine=sos.some(m=>m.id===uid);
+  b.innerHTML='تنبيه استغاثة SOS من: '+names+' — يحتاج إلى مساعدة فورية.'+(mine?' <button id="sosOk">أنا بخير</button>':'');
+  b.classList.add('show');
+  const ok=$('#sosOk');
+  if(ok) ok.addEventListener('click', clearMySos);
+}
+const AICONS={
+  sos:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  zone:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>',
+  batt:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2M6 11v2"/></svg>',
+  info:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>'
+};
+function readTs(){ try{ return +localStorage.getItem('fs_alerts_read')||0; }catch(e){ return 0; } }
+function renderAlerts(){
+  const el=$('#alertsList');
+  if(!alertsArr.length){ el.innerHTML='<div class="empty">لا توجد تنبيهات بعد — ستظهر هنا تنبيهات الاستغاثة والمناطق الآمنة والبطارية.</div>'; return; }
+  const rt=readTs();
+  el.innerHTML = alertsArr.map(a=>
+    '<div class="alert-item a-'+a.type+(a.at>rt?' unread':'')+'">'+
+      '<span class="alert-ico">'+(AICONS[a.type]||AICONS.info)+'</span>'+
+      '<span><p>'+esc(a.text)+'</p><time>'+clock(a.at)+' — '+timeAgo(a.at)+'</time></span>'+
+    '</div>').join('');
+}
+function renderZones(){
+  const el=$('#zonesList');
+  const list=Object.keys(zones).map(id=>zones[id]);
+  if(!list.length){ el.innerHTML='<div class="empty">لا توجد مناطق آمنة بعد — أضف أول منطقة (البيت، المدرسة…) ليصلك تنبيه عند دخول أفراد عائلتك إليها أو خروجهم منها.</div>'; return; }
+  el.innerHTML = list.map(z=>
+    '<div class="zone-item"><span class="zone-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>'+
+    '<span><b>'+esc(z.name)+'</b><span>نصف القطر '+toAr(z.radius)+' متر — '+toAr(memberList().filter(m=>hasPos(m)&&zoneNameAt(m.lat,m.lng)===z.name).length)+' بالداخل الآن</span></span>'+
+    '<button class="del" data-id="'+z.id+'" aria-label="حذف المنطقة">✕</button></div>').join('');
+  el.querySelectorAll('.del').forEach(b=>b.addEventListener('click',()=>{
+    famRef().collection('zones').doc(b.dataset.id).delete()
+      .then(()=>toast('تم حذف المنطقة الآمنة'))
+      .catch(()=>toast('تعذّر حذف المنطقة — تحقق من الاتصال'));
+  }));
+}
+function renderStats(){
+  const list=memberList();
+  $('#statMembers').textContent = toAr(list.filter(isOnline).length);
+  const withPos=list.filter(hasPos);
+  $('#statInside').textContent = toAr(withPos.filter(m=>zoneNameAt(m.lat,m.lng)).length) + ' / ' + toAr(list.length);
+  $('#statZones').textContent = toAr(Object.keys(zones).length);
+  $('#statAlerts').textContent = toAr(alertsArr.filter(a=>a.at>readTs()).length);
+}
+function renderAll(){ renderMembers(); renderZones(); renderStats(); syncMap(); if(selectedId) renderDetail(); }
+
+function renderDetail(){
+  const m=members[selectedId];
+  const p=$('#detailPanel');
+  if(!m){ p.classList.remove('show'); return; }
+  p.classList.add('show');
+  const t=tsMs(m.updatedAt);
+  const inz = hasPos(m) ? zoneNameAt(m.lat,m.lng) : null;
+  $('#detailTitle').textContent='تفاصيل '+m.name+(m.id===uid?' (هذا هاتفك)':'');
+  $('#detailGrid').innerHTML =
+    '<div><span>الدور: </span><b>'+esc(m.role||'—')+'</b></div>'+
+    '<div><span>الحالة: </span><b>'+(m.sos?'طلب استغاثة SOS': isOnline(m)?'متصل الآن':'غير متصل')+'</b></div>'+
+    '<div><span>البطارية: </span><b>'+(typeof m.battery==='number'? toAr(m.battery)+'٪':'غير متاحة')+'</b></div>'+
+    '<div><span>آخر تحديث: </span><b>'+timeAgo(t)+'</b></div>'+
+    '<div><span>المنطقة الآمنة: </span><b>'+(inz? 'داخل «'+esc(inz)+'»':'خارج المناطق الآمنة')+'</b></div>'+
+    '<div><span>دقة الموقع: </span><b>'+(typeof m.accuracy==='number'? toAr(Math.round(m.accuracy))+' متر':'—')+'</b></div>'+
+    (hasPos(m)? '<div style="grid-column:1/-1"><span>الإحداثيات: </span><b dir="ltr">'+m.lat.toFixed(5)+', '+m.lng.toFixed(5)+'</b></div>':'<div style="grid-column:1/-1"><span>الموقع: </span><b>لم يشارك موقعه بعد</b></div>');
+  const link=$('#dirLink');
+  if(hasPos(m)){ link.style.display='inline-flex'; link.href='https://www.google.com/maps/dir/?api=1&destination='+m.lat+','+m.lng; }
+  else link.style.display='none';
+}
+function selectMember(id, fly){
+  selectedId=id;
+  const m=members[id]; if(!m) return;
+  renderMembers(); renderDetail();
+  if(fly && map && hasPos(m)) map.flyTo([m.lat,m.lng],16,{duration:.8});
+  if(hasPos(m)) setTimeout(()=>{ if(markers[id]) markers[id].openPopup(); }, fly?850:50);
+  $('#detailPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+/* Refresh relative times periodically */
+setInterval(()=>{ if(entered){ renderMembers(); renderAlerts(); renderStats(); if(selectedId) renderDetail(); } },30000);
+
+/* ================= SOS ================= */
+$('#sosBtn').addEventListener('click', async ()=>{
+  if(!entered) return;
+  const me=members[uid];
+  if(me && me.sos){ clearMySos(); return; }
+  if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  try{
+    await myRef().set({ sos:true, sosAt:serverTs() }, { merge:true });
+    addAlertDoc('sos','تنبيه استغاثة SOS من '+identity.name+' — يحتاج إلى مساعدة فورية، وموقعه ظاهر على الخريطة الآن.');
+    toast('تم إرسال تنبيه SOS إلى كل أفراد العائلة');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){ toast('تعذّر إرسال الاستغاثة — تحقق من الاتصال'); }
+});
+async function clearMySos(){
+  try{
+    await myRef().set({ sos:false }, { merge:true });
+    addAlertDoc('info', identity.name+' أكّد الآن أنه بخير، وتم إلغاء حالة الاستغاثة.');
+    toast('تم إلغاء حالة الاستغاثة');
+  }catch(e){ toast('تعذّر إلغاء الاستغاثة — تحقق من الاتصال'); }
+}
+
+/* ================= Connection state ================= */
+window.addEventListener('offline', ()=>showStatus('warn','انقطع اتصال الإنترنت على هذا الهاتف — ستتوقف المزامنة مؤقتًا وتعود تلقائيًا عند رجوع الاتصال.'));
+window.addEventListener('online', ()=>{ showStatus('',''); toast('عاد الاتصال بالإنترنت'); });
+
+/* ================= Modals ================= */
+function openModal(id){ $('#'+id).classList.add('show'); }
+function closeModal(id){ $('#'+id).classList.remove('show'); }
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('show'); }));
+function openInvite(){ openModal('inviteModal'); }
+$('#inviteBtn').addEventListener('click',openInvite);
+$('#inviteBtn2').addEventListener('click',openInvite);
+$('#copyCodeBtn').addEventListener('click',()=>{
+  const code=identity?identity.code:'';
+  const done=()=>toast('تم نسخ كود العائلة — أرسله لأفراد أسرتك لينضموا');
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(done).catch(()=>toast('انسخ الكود يدويًا: '+code)); }
+  else toast('انسخ الكود يدويًا: '+code);
+});
+$('#leaveBtn').addEventListener('click', async ()=>{
+  try{ if(watchId!=null) navigator.geolocation.clearWatch(watchId); }catch(e){}
+  try{ await myRef().delete(); }catch(e){}
+  unsubs.forEach(u=>{ try{u();}catch(e){} });
+  try{ localStorage.removeItem(IDKEY); }catch(e){}
+  identity=null; entered=false;
+  closeModal('inviteModal');
+  $('#sosWrap').classList.remove('show');
+  $('#famChip').style.display='none';
+  $('#setupScreen').classList.add('show');
+  toast('غادرت العائلة وتوقفت مشاركة موقع هذا الهاتف');
+});
+function openZoneModal(){ openModal('zoneModal'); }
+$('#addZoneBtn').addEventListener('click',openZoneModal);
+$('#addZoneBtnTop').addEventListener('click',openZoneModal);
+$('#fitBtn').addEventListener('click',fitAll);
+$('#readAllBtn').addEventListener('click',()=>{ try{ localStorage.setItem('fs_alerts_read', String(Date.now())); }catch(e){} renderAlerts(); renderStats(); toast('تم تعليم كل التنبيهات كمقروءة'); });
+
+/* Add zone */
+$('#zRadius').addEventListener('input',e=>{ $('#zRadiusVal').textContent=toAr(e.target.value); });
+$('#saveZoneBtn').addEventListener('click', async ()=>{
+  const name=$('#zName').value.trim();
+  if(!name){ toast('من فضلك أدخل اسم المنطقة'); return; }
+  const c=$('#zCenter').value;
+  let lat,lng;
+  if(c==='me'){
+    if(!myPos){ toast('لم يتم تحديد موقع هذا الهاتف بعد — انتظر تفعيل المشاركة أو اختر مركز الخريطة'); return; }
+    lat=myPos.lat; lng=myPos.lng;
+  }else{
+    if(map){ const ctr=map.getCenter(); lat=ctr.lat; lng=ctr.lng; }
+    else if(myPos){ lat=myPos.lat; lng=myPos.lng; }
+    else { toast('لا يوجد مركز متاح حاليًا'); return; }
+  }
+  try{
+    await famRef().collection('zones').add({ name, lat, lng, radius:+$('#zRadius').value });
+    closeModal('zoneModal'); $('#zName').value='';
+    toast('تم حفظ المنطقة الآمنة «'+name+'»');
+  }catch(e){ toast('تعذّر حفظ المنطقة — تحقق من الاتصال'); }
+});
+
+/* ================= Boot: anonymous auth ================= */
+(function boot(){
+  if(typeof firebase==='undefined'){
+    $('#connNote').textContent='تعذّر تحميل مكتبات Firebase — تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.';
+    setupError('تعذّر الاتصال بخادم التتبّع (Firebase). تحقق من الإنترنت وأعد تحميل الصفحة.');
+    return;
+  }
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db=firebase.firestore();
+    firebase.auth().onAuthStateChanged(user=>{
+      if(user){
+        uid=user.uid; fbReady=true;
+        $('#connNote').textContent='متصل بخادم التتبّع — جاهز.';
+        if(identity && !entered){
+          /* Verify the saved family still exists before rejoining */
+          db.collection('families').doc(identity.code).get().then(snap=>{
+            if(snap.exists){ enterFamily(); }
+            else{
+              try{ localStorage.removeItem(IDKEY); }catch(e){}
+              identity=null;
+              setupError('عائلة هذا الجهاز لم تعد موجودة — أنشئ عائلة جديدة أو انضم بكود آخر.');
+            }
+          }).catch(()=>{ enterFamily(); });
+        }
+      }else{
+        firebase.auth().signInAnonymously().catch(()=>{
+          $('#connNote').textContent='تعذّر تسجيل الدخول المجهول — تحقق من الاتصال وأعد تحميل الصفحة.';
+          setupError('تعذّر تسجيل الدخول إلى خادم التتبّع. تحقق من الإنترنت وأعد تحميل الصفحة.');
+        });
+      }
+    });
+  }catch(e){
+    $('#connNote').textContent='حدث خطأ أثناء الاتصال بخادم التتبّع.';
+    setupError('حدث خطأ أثناء الاتصال بخادم التتبّع (Firebase) — أعد تحميل الصفحة.');
+  }
+})();
+</script>
+</body>
+</html>

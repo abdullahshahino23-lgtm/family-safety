@@ -147,10 +147,17 @@ a{color:var(--teal)}
 /* SOS float */
 .sos-wrap{position:fixed;bottom:20px;left:20px;z-index:1300;display:none;flex-direction:column;align-items:center;gap:6px}
 .sos-wrap.show{display:flex}
-.sos-btn{width:84px;height:84px;border-radius:50%;border:5px solid #fff;background:var(--red);color:#fff;font-family:inherit;font-weight:900;font-size:1.25rem;cursor:pointer;box-shadow:0 10px 32px rgba(201,42,42,.45);animation:sosPulse 2.2s infinite}
+.sos-ring{position:relative;width:102px;height:102px;display:grid;place-items:center}
+.sos-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);pointer-events:none}
+.sos-ring .ring-bg{fill:none;stroke:var(--line);stroke-width:5}
+.sos-ring .ring-fg{fill:none;stroke:var(--red-dark);stroke-width:5;stroke-linecap:round;stroke-dasharray:289.03;stroke-dashoffset:289.03}
+.sos-btn{width:84px;height:84px;border-radius:50%;border:5px solid #fff;background:var(--red);color:#fff;font-family:inherit;font-weight:900;font-size:1.25rem;cursor:pointer;box-shadow:0 10px 32px rgba(201,42,42,.45);animation:sosPulse 2.2s infinite;position:relative;z-index:1;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 @keyframes sosPulse{0%{box-shadow:0 10px 32px rgba(201,42,42,.45),0 0 0 0 rgba(201,42,42,.35)}70%{box-shadow:0 10px 32px rgba(201,42,42,.45),0 0 0 18px rgba(201,42,42,0)}100%{box-shadow:0 10px 32px rgba(201,42,42,.45),0 0 0 0 rgba(201,42,42,0)}}
 .sos-btn:active{transform:scale(.94)}
+.sos-btn.pressing{animation:none;background:var(--red-dark);transform:scale(.96)}
+.sos-btn.is-active{background:var(--red-dark)}
 .sos-label{font-size:.78rem;font-weight:800;color:var(--muted);background:var(--surface);padding:2px 12px;border-radius:999px;border:1px solid var(--line)}
+.sos-label.pressing{color:var(--red);border-color:var(--red)}
 
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(10,20,16,.55);z-index:2000;display:none;align-items:flex-end;justify-content:center;padding:0}
@@ -292,8 +299,11 @@ footer{margin-top:26px;text-align:center;color:var(--faint);font-size:.82rem}
 
 <!-- SOS -->
 <div class="sos-wrap" id="sosWrap">
-  <button class="sos-btn" id="sosBtn" aria-label="زر الاستغاثة">SOS</button>
-  <span class="sos-label">اضغط للاستغاثة الفورية</span>
+  <div class="sos-ring">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="ring-bg" cx="50" cy="50" r="46"></circle><circle class="ring-fg" id="sosRingFg" cx="50" cy="50" r="46"></circle></svg>
+    <button class="sos-btn" id="sosBtn" aria-label="زر الاستغاثة — اضغط مطوّلًا للإرسال">SOS</button>
+  </div>
+  <span class="sos-label" id="sosLabel">اضغط مطوّلًا للإرسال</span>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -432,6 +442,7 @@ let identity=null;
 try{ identity=JSON.parse(localStorage.getItem(IDKEY)||'null'); }catch(e){ identity=null; }
 
 let members={}, zones={}, alertsArr=[], selectedId=null;
+let seenAlertIds=null; /* null until the first alerts snapshot sets the baseline (no vibration for old alerts) */
 let myPos=null, batteryLevel=null, watchId=null, lastWrite=0, lastWritePos=null;
 let myZoneName, zonesLoaded=false, lowBattSent=false, entered=false;
 let unsubs=[];
@@ -558,6 +569,7 @@ async function enterFamily(){
   unsubs.push(famRef().collection('alerts').orderBy('at','desc').limit(30).onSnapshot(snap=>{
     alertsArr=[];
     snap.forEach(d=>{ const a=d.data(); alertsArr.push({ id:d.id, type:a.type||'info', text:a.text||'', memberName:a.memberName||'', at:tsMs(a.at)||Date.now() }); });
+    handleNewSosVibration();
     renderAlerts(); renderStats();
   }, err=>{}));
 
@@ -641,6 +653,24 @@ function checkMyZone(){
 function addAlertDoc(type, text){
   if(!identity || !uid) return;
   famRef().collection('alerts').add({ type, text, memberName:identity.name, at:serverTs() }).catch(()=>{});
+}
+
+/* Vibrate once per brand-new SOS alert from another family member.
+   The first snapshot after entering only sets the baseline, so alerts
+   that already existed when the app opened never vibrate; alerts sent
+   by this phone (memberName === own name) never vibrate either. */
+function handleNewSosVibration(){
+  if(seenAlertIds===null){
+    seenAlertIds=new Set(alertsArr.map(a=>a.id));
+    return;
+  }
+  alertsArr.forEach(a=>{
+    if(seenAlertIds.has(a.id)) return;
+    seenAlertIds.add(a.id);
+    if(a.type==='sos' && identity && a.memberName!==identity.name && navigator.vibrate){
+      try{ navigator.vibrate([300,150,300,150,300]); }catch(e){}
+    }
+  });
 }
 
 /* ================= Map ================= */
@@ -738,6 +768,7 @@ function renderMembers(){
   $('#quickChips').innerHTML = list.filter(hasPos).map(m=>'<button class="chip" data-id="'+m.id+'">'+esc((m.name||'').split(' ')[0])+'</button>').join('');
   $('#quickChips').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>selectMember(c.dataset.id,true)));
   renderSosBanner(list);
+  syncSosBtn();
 }
 function renderSosBanner(list){
   list = list || memberList();
@@ -824,11 +855,65 @@ function selectMember(id, fly){
 /* Refresh relative times periodically */
 setInterval(()=>{ if(entered){ renderMembers(); renderAlerts(); renderStats(); if(selectedId) renderDetail(); } },30000);
 
-/* ================= SOS ================= */
-$('#sosBtn').addEventListener('click', async ()=>{
-  if(!entered) return;
+/* ================= SOS: long-press to send, single tap to cancel ================= */
+const SOS_HOLD_MS=1500;
+let sosPressing=false, sosHoldStart=0, sosRaf=null, sosHoldTimer=null, sosSuppressClick=false;
+const SOS_RING_C=2*Math.PI*46;
+
+function setSosProgress(p){
+  const ring=$('#sosRingFg');
+  if(ring) ring.style.strokeDashoffset=String(SOS_RING_C*(1-p));
+}
+function syncSosBtn(){
+  const btn=$('#sosBtn'), label=$('#sosLabel');
+  if(!btn || !label) return;
+  const me=uid?members[uid]:null;
+  const active=!!(me && me.sos);
+  btn.classList.toggle('is-active', active);
+  btn.setAttribute('aria-label', active?'إلغاء الاستغاثة':'زر الاستغاثة — اضغط مطوّلًا للإرسال');
+  if(!sosPressing) label.textContent = active ? 'الاستغاثة مفعّلة — اضغط للإلغاء' : 'اضغط مطوّلًا للإرسال';
+}
+function sosPressStart(){
+  if(!entered || sosPressing) return;
   const me=members[uid];
-  if(me && me.sos){ clearMySos(); return; }
+  if(me && me.sos) return; /* active SOS: a plain tap (click) cancels it */
+  sosPressing=true;
+  sosHoldStart=performance.now();
+  const btn=$('#sosBtn'), label=$('#sosLabel');
+  btn.classList.add('pressing');
+  label.classList.add('pressing');
+  label.textContent='استمر بالضغط حتى يكتمل الإرسال…';
+  const step=()=>{
+    if(!sosPressing) return;
+    setSosProgress(Math.min(1,(performance.now()-sosHoldStart)/SOS_HOLD_MS));
+    if(performance.now()-sosHoldStart < SOS_HOLD_MS) sosRaf=requestAnimationFrame(step);
+  };
+  sosRaf=requestAnimationFrame(step);
+  sosHoldTimer=setTimeout(completeSosHold, SOS_HOLD_MS);
+}
+function sosPressEnd(){
+  if(!sosPressing) return;
+  sosPressing=false;
+  clearTimeout(sosHoldTimer);
+  if(sosRaf) cancelAnimationFrame(sosRaf);
+  setSosProgress(0);
+  $('#sosBtn').classList.remove('pressing');
+  $('#sosLabel').classList.remove('pressing');
+  syncSosBtn();
+}
+function completeSosHold(){
+  if(!sosPressing) return;
+  sosPressing=false;
+  if(sosRaf) cancelAnimationFrame(sosRaf);
+  setSosProgress(1);
+  $('#sosBtn').classList.remove('pressing');
+  $('#sosLabel').classList.remove('pressing');
+  $('#sosLabel').textContent='جارٍ إرسال الاستغاثة…';
+  sosSuppressClick=true; /* the click that follows this release must not cancel */
+  sendSos();
+  setTimeout(()=>setSosProgress(0), 450);
+}
+async function sendSos(){
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
   try{
     await myRef().set({ sos:true, sosAt:serverTs() }, { merge:true });
@@ -836,6 +921,21 @@ $('#sosBtn').addEventListener('click', async ()=>{
     toast('تم إرسال تنبيه SOS إلى كل أفراد العائلة');
     window.scrollTo({top:0,behavior:'smooth'});
   }catch(e){ toast('تعذّر إرسال الاستغاثة — تحقق من الاتصال'); }
+  syncSosBtn();
+}
+const sosBtnEl=$('#sosBtn');
+sosBtnEl.addEventListener('pointerdown', sosPressStart);
+sosBtnEl.addEventListener('pointerup', sosPressEnd);
+sosBtnEl.addEventListener('pointercancel', sosPressEnd);
+sosBtnEl.addEventListener('pointerleave', sosPressEnd);
+sosBtnEl.addEventListener('contextmenu', e=>e.preventDefault());
+sosBtnEl.addEventListener('keydown', e=>{ if((e.key===' '||e.key==='Enter') && !e.repeat) sosPressStart(); });
+sosBtnEl.addEventListener('keyup', e=>{ if(e.key===' '||e.key==='Enter') sosPressEnd(); });
+sosBtnEl.addEventListener('click', ()=>{
+  if(sosSuppressClick){ sosSuppressClick=false; return; }
+  if(!entered) return;
+  const me=members[uid];
+  if(me && me.sos) clearMySos();
 });
 async function clearMySos(){
   try{
